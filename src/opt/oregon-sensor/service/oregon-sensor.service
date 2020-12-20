@@ -1,0 +1,17 @@
+[Unit]
+Description=Oregon Sensor, bridge de données entre des sondes météo Oregon Scientific 433MHz et un broker MQTT
+
+[Service]
+# Note: setting PYTHONUNBUFFERED is necessary to see the output of this service in the journal
+# See https://docs.python.org/2/using/cmdline.html#envvar-PYTHONUNBUFFERED
+Environment=PYTHONUNBUFFERED=true
+ExecStart=/opt/oregon-sensor/virtualenv/bin/python3 /opt/oregon-sensor/bin/oregon-sensor.py
+Type=notify
+WatchdogSec=300
+Restart=on-failure
+RestartSec=60
+User=oregonsensor
+Group=oregonsensor
+
+[Install]
+WantedBy=multi-user.target

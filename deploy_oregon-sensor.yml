@@ -1,0 +1,136 @@
+---
+
+- hosts: oregon_sensor
+  
+  tasks:
+    - block:
+    
+      - name: Création du groupe
+        group: 
+          name: oregonsensor
+
+      - name: Création de l'utilisateur
+        user: 
+          name: oregonsensor
+          group: oregonsensor
+          groups: i2c
+          password_lock: yes
+
+      - name: Création des répertoires dans /opt/oregon-sensor
+        file: 
+          name: "{{ item }}"
+          state: directory
+          owner: oregonsensor
+          group: oregonsensor
+          mode: 0755
+        loop:
+          - /opt/oregon-sensor
+          - /opt/oregon-sensor/virtualenv
+          - /opt/oregon-sensor/bin
+          - /opt/oregon-sensor/service
+          - /opt/oregon-sensor/conf
+
+      - name: Création des répertoires dans /etc
+        file:
+          name: /etc/oregon-sensor
+          state: directory
+          owner: root
+          group: oregonsensor
+          mode: 0755
+
+      - name: Installation de Python3
+        apt:
+          name: 
+            # Intrepréteur Python3 et virtualenv pour le script oregon-sensor.py 
+            - python3
+            - python3-pip
+            - python3-venv
+            - python3-setuptools
+            # Problème avec Ansible. su vers un utilisateur non-root
+            # https://stackoverflow.com/questions/36646880/ansible-2-1-0-using-become-become-user-fails-to-set-permissions-on-temp-file/36681626
+            - acl
+            # Problème avec Ansible. Pour utiliser pip, un setuptools doit être installé dans l'interpréteur Python exécutant Ansible sur la machine remote           
+            # https://github.com/ansible/ansible/issues/61929
+            - python-setuptools
+
+      become: yes      
+
+    - name: Création d'un virtualenv
+      become_user: oregonsensor
+      become: yes
+      shell:  |
+        python3 -m venv /opt/oregon-sensor/virtualenv
+      args:
+        creates: /opt/oregon-sensor/virtualenv/bin/activate
+    
+    - name: Installation des paquets Python
+      become_user: oregonsensor
+      become: yes
+      pip:
+        name:
+          - configparser
+          - paho_mqtt
+          - sdnotify
+          - smbus2
+        executable: /opt/oregon-sensor/virtualenv/bin/pip3
+    
+    - name: Copie des fichiers 
+      become_user: root
+      become: yes
+      copy:
+        src: "src/{{ item.src}}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        owner: oregonsensor
+        group: oregonsensor
+      with_items:
+        - src: opt/oregon-sensor/bin/oregon-sensor.py
+          dest: /opt/oregon-sensor/bin/oregon-sensor.py
+          mode: "0755"
+        - src: opt/oregon-sensor/service/oregon-sensor.service
+          dest: /opt/oregon-sensor/service/oregon-sensor.service
+          mode: "0644"
+        - src: opt/oregon-sensor/conf/oregon-sensor.example.conf
+          dest: /opt/oregon-sensor/conf/oregon-sensor.example.conf
+          mode: "0644"
+      notify:
+        - "Rechargement de la description des services SystemD"
+        - "Activation et démarrage du service"
+
+    - name: Dépot de la configuration
+      become: yes
+      copy:
+        src: /opt/oregon-sensor/conf/oregon-sensor.example.conf
+        dest: /etc/oregon-sensor/oregon-sensor.conf
+        force: no
+        remote_src: yes
+        owner: root
+        group: root
+        mode: 0644
+      notify:
+        - "Rechargement de la description des services SystemD"
+        - "Activation et démarrage du service"
+
+    - name: Ajout du service dans la configuration SystemD
+      become: yes
+      file:
+        state: link
+        src: /opt/oregon-sensor/service/oregon-sensor.service
+        dest: /etc/systemd/system/oregon-sensor.service
+      notify:
+        - "Rechargement de la description des services SystemD"
+        - "Activation et démarrage du service"
+
+  handlers:
+    - name: Rechargement de la description des services SystemD
+      systemd:
+        daemon_reload: yes
+      become: yes
+        
+    - name: Activation et démarrage du service
+      systemd:
+        name: oregon-sensor
+        state: restarted
+        enabled: yes
+      become: yes
+      
