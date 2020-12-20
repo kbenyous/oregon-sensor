@@ -43,13 +43,15 @@ def main():
     
     # Configuration du client mqtt
     client = mqtt.Client(mqtt_client_name)
-    client.will_set(status_queue, payload="Connection Lost", qos=0, retain=True)
+    client.will_set(status_queue, payload="Connection Lost", qos=2, retain=True)
 
-    client.connect(mqtt_broker_hostname, mqtt_broker_port) 
+    client.connect_async(mqtt_broker_hostname, mqtt_broker_port) 
+    
     
     systemd_notifier.notify('READY=1')
     client.loop_start()
-    client.publish(status_queue, payload="Connected", qos=0, retain=True)
+    time.sleep(2)
+    client.publish(status_queue, payload="Connected", qos=2, retain=True)
     
     logging.info("Connected to broker")    
 
@@ -70,18 +72,18 @@ def main():
                         sign = -1 if (data[6]&0x8) else 1
                         temp = ((data[5]&0xF0) >> 4)*10 + (data[5]&0xF) + (float)(((data[4]&0xF0) >> 4) / 10.0)
                         temperature = sign * temp
-                        message['Temperature'] = temperature
+                        message['Temperature'] = str(temperature)
 
                         #Humidity
                         if(data[0] == 0x1A and data[1] == 0x2D) :
                             humidity = (data[7]&0xF) * 10 + ((data[6]&0xF0) >> 4)
-                            message['Humidity'] = humidity
+                            message['Humidity'] = str(humidity)
 
                         #Battery
-                        message['Battery'] = 10 if (data[4] & 0x4) else 90
+                        message['Battery'] = "10" if (data[4] & 0x4) else "90"
 
                         #Channel
-                        message['Channel'] = 1 if data[2] == 0x10 else 2 if data[2] == 0x20 else 3
+                        message['Channel'] = "1" if data[2] == 0x10 else "2" if data[2] == 0x20 else "3"
 
                         #Sensor ID
                         message['Id'] = hex(data[3])
