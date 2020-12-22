@@ -65,6 +65,41 @@ def main():
                         logging.debug("Getting updated data from channel {}".format(channel))
                         message = dict()
 
+                        # Truncate data (remove 0 padding) 
+                        while (0 is data[-1]) and (len(data)>10):
+                            data.pop()
+
+                        # Debug : raw data output
+                        if logging.DEBUG >= logging.root.level :
+                            hexdump = ""
+                            for i in data:
+                                hexdump += hex(i >> 4)[2:]
+                                hexdump += hex(i & 0x0F)[2:]
+                            logging.debug(hexdump)                    
+
+                        # print("checksum depuis trame:")
+                        # print(data[-1])
+                        # print("checksum depuis trame, bits inversés:")
+                        # inver=((data[-1] & 0x0f)<< 4) | (data[-1] >> 4)
+                        # print(inver)
+                        # # Compute checksum      
+                        # checksum = 0x43
+                        # for i in data[:-1]: # Sum sur data sans son dernier octet, car le dernier octet de data est le checksum                        
+                        #     checksum += ((i & 0xF0) >> 4)
+                        #     print(i >> 4)
+                        #     print("-----")
+                        #     print(checksum)
+                        #     checksum += (i & 0x0F)
+                        #     print(i & 0x0F)
+                        #     print("-----")
+                        #     print(checksum)
+                        # # Debug : print checksum
+                        # if logging.DEBUG >= logging.root.level :
+                        #     hexchecksum = ""
+                        #     hexchecksum += hex(checksum >> 4)[2:]
+                        #     hexchecksum += hex(checksum & 0x0F)[2:]
+                        #     logging.debug(hexchecksum)      
+    
                         # Temperature
                         sign = -1 if (data[6] & 0x8) else 1
                         temp = ((data[5] & 0xF0) >> 4)*10 + (data[5] & 0xF) + (float)(((data[4] & 0xF0) >> 4) / 10.0)
@@ -89,7 +124,11 @@ def main():
                         message['Room'] = channel_names[str(message['Channel'])]
 
                         logging.debug(json.dumps(message))
-                        client.publish(data_queue.format(message['Room']), payload=json.dumps(message), qos=0)
+
+                        # Sanity check (since checksum test is wired)
+                        if float(message['Temperature']) >=-15 and float(message['Temperature'])<=45 and int(message['Humidity']) >=0 and int(message['Humidity'])<=100:
+                            client.publish(data_queue.format(message['Room']), payload=json.dumps(message), qos=0)
+                            
                 except OSError as e:
                     logging.error(e)
                 time.sleep(20)
