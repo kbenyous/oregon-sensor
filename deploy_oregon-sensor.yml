@@ -1,7 +1,7 @@
 ---
 
 - hosts: oregon_sensor
-  
+
   tasks:
     - block:
     
@@ -29,6 +29,14 @@
           - /opt/oregon-sensor/bin
           - /opt/oregon-sensor/service
           - /opt/oregon-sensor/conf
+
+      - name: Activation du port TwoWire (I2C)    
+        lineinfile:
+          path: /boot/config.txt     
+          regexp: '^(\#\s*)?dtparam\=i2c_arm\='
+          line: dtparam=i2c_arm=on
+          insertafter: '^\[all\]$'
+        notify: "Modification dynamique de dtparam"
 
       - name: Création des répertoires dans /etc
         file:
@@ -133,4 +141,9 @@
         state: restarted
         enabled: yes
       become: yes
+
+    - name: Modification dynamique de dtparam
+      shell: /usr/bin/dtparam i2c_arm=on
+      become: yes
+
       
